@@ -1,8 +1,8 @@
 
 	processor 6502
         include "vcs.h"
-        include "macro.h"
-        include "xmacro.h"
+       	include "macro.h"
+       	include "xmacro.h"
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Variables segment
@@ -38,9 +38,42 @@ NextFrame
 ; total = 262 lines, go to next frame
         jmp NextFrame
 
+Sprite
+
+;---Graphics Data from PlayerPal 2600---
+
+Frame0
+    	.byte #%00111100;$F6
+    	.byte #%01111110;$F6
+    	.byte #%01111110;$C4
+    	.byte #%01111110;$F0
+    	.byte #%01111110;$42
+    	.byte #%01111110;$1A
+    	.byte #%01111110;$F6
+    	.byte #%00111100;$F6
+;---End Graphics Data---
+
+
+;---Color Data from PlayerPal 2600---
+
+ColorFrame0
+    	.byte #$F6;
+    	.byte #$F6;
+    	.byte #$C4;
+    	.byte #$F0;
+    	.byte #$42;
+    	.byte #$1A;
+    	.byte #$F6;
+    	.byte #$F6;
+;---End Color Data---
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Epilogue
 
 	org $fffc
         .word Start	; reset vector
         .word Start	; BRK vector
+
+
