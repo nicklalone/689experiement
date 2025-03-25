@@ -1,0 +1,168 @@
+
+	processor 6502
+        include "vcs.h"
+       	include "macro.h"
+       	include "xmacro.h"
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Variables segment
+
+        seg.u Variables
+	org $80
+
+Temp		.byte
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Code segment
+
+	seg Code
+        org $f000
+
+Start
+	CLEAN_START
+
+NextFrame
+        lsr SWCHB	; test Game Reset switch
+        bcc Start	; reset?
+; BG color
+        ldx #$80	
+    	stx COLUBK	
+; PF color
+	lda #$1C
+        sta COLUPF
+; 1 + 3 lines of VSYNC
+	VERTICAL_SYNC
+; 37 lines of underscan
+	TIMER_SETUP 37
+        TIMER_WAIT
+
+; I feel like I messed up the drawing but it's not freaking out so maybe it's okay?
+DrawField
+; Reflection
+	ldx #%00000001
+        stx CTRLPF
+; Clear PF registers
+	ldx #0
+        stx PF0
+        stx PF1
+        stx PF2
+; Wait for next scanline
+	REPEAT 10
+        sta WSYNC
+	REPEND
+; Top line
+	ldx #%11100000
+        stx PF0
+        ldx #%11111111
+        stx PF1
+        stx PF2
+        REPEAT 8
+        sta WSYNC
+        REPEND
+; Middle
+	ldx #%00100000
+        stx PF0
+        ldx #0
+        stx PF1
+        stx PF2
+        REPEAT 20
+        sta WSYNC
+        REPEND
+        ldx #%10100000
+        stx PF0
+        ldx #0
+        stx PF1
+        stx PF2
+        REPEAT 10
+        sta WSYNC
+        REPEND
+        ldx #%00100000
+        stx PF0
+        ldx #0
+        stx PF1
+        stx PF2
+        REPEAT 115
+        sta WSYNC
+        REPEND
+        ldx #%10100000
+        stx PF0
+        ldx #0
+        stx PF1
+        stx PF2
+        REPEAT 10
+        sta WSYNC
+        REPEND
+        ldx #%00100000
+        stx PF0
+        ldx #0
+        stx PF1
+        stx PF2
+        REPEAT 20
+        sta WSYNC
+        REPEND
+; Bottom
+	ldx #%11100000
+        stx PF0
+        ldx #%11111111
+        stx PF1
+        stx PF2
+        REPEAT 8
+        sta WSYNC
+        REPEND
+; End
+	ldx #0
+        stx PF0
+        stx PF1
+        stx PF2
+        REPEAT 10
+        sta WSYNC
+        REPEND
+
+OverScan
+; 29 lines of overscan
+	TIMER_SETUP 29
+        TIMER_WAIT
+; total = 262 lines, go to next frame
+        jmp NextFrame
+
+Sprite
+
+;---Graphics Data from PlayerPal 2600---
+
+Frame0
+    	.byte #%00111100;$F6
+    	.byte #%01111110;$F6
+    	.byte #%01111110;$C4
+    	.byte #%01111110;$F0
+    	.byte #%01111110;$42
+    	.byte #%01111110;$1A
+    	.byte #%01111110;$F6
+    	.byte #%00111100;$F6
+;---End Graphics Data---
+
+
+;---Color Data from PlayerPal 2600---
+
+ColorFrame0
+    	.byte #$F6;
+    	.byte #$F6;
+    	.byte #$C4;
+    	.byte #$F0;
+    	.byte #$42;
+    	.byte #$1A;
+    	.byte #$F6;
+    	.byte #$F6;
+;---End Color Data---
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Epilogue
+
+	org $fffc
+        .word Start	; reset vector
+        .word Start	; BRK vector
+
+
+
+
