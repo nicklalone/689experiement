@@ -4,8 +4,9 @@
        	include "macro.h"
        	include "xmacro.h"
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Variables segment
+;=======================================
+; 
+;=======================================
 
         seg.u Variables
 	org $80
@@ -22,9 +23,9 @@ YPos		.byte
 
 Start
 	CLEAN_START
-        lda #20
+        lda #80
         sta XPos
-        lda #1
+        lda #80
         sta YPos
 
 NextFrame
@@ -55,11 +56,11 @@ NextFrame
 ; the PIA timer will always count 37 lines
 ; wait for end of underscan
         
-        
-        
         TIMER_WAIT
 
-; I feel like I messed up the drawing but it's not freaking out so maybe it's okay?
+; I feel like I messed up the drawing but 
+;it's not freaking out so maybe it's okay?
+
 DrawField
 ; Reflection
 	ldx #%00000001
@@ -82,49 +83,31 @@ DrawField
         REPEAT 8
         sta WSYNC
         REPEND
+        
         ldy #174 ;Start line counter for player
+
 ; Middle
-	ldx #%00100000
-        stx PF0
-        ldx #0
-        stx PF1
-        stx PF2
         REPEAT 20
+        jsr DrawWall
         jsr CheckPlayer
-        ;sta WSYNC
         REPEND
-        ldx #%10100000
-        stx PF0
-        ldx #0
-        stx PF1
-        stx PF2
         REPEAT 10
+        jsr DrawDot
         jsr CheckPlayer
         REPEND
-        ldx #%00100000
-        stx PF0
-        ldx #0
-        stx PF1
-        stx PF2
         REPEAT 115
+        jsr DrawWall
         jsr CheckPlayer
         REPEND
-        ldx #%10100000
-        stx PF0
-        ldx #0
-        stx PF1
-        stx PF2
         REPEAT 10
+        jsr DrawDot
         jsr CheckPlayer
         REPEND
-        ldx #%00100000
-        stx PF0
-        ldx #0
-        stx PF1
-        stx PF2
         REPEAT 20
+        jsr DrawWall
         jsr CheckPlayer
         REPEND
+        
 ; Bottom
 	ldx #%11100000
         stx PF0
@@ -150,6 +133,21 @@ OverScan
 ; total = 262 lines, go to next frame
         jmp NextFrame
 
+DrawWall
+	ldx #%00100000
+        stx PF0
+        ldx #0
+        stx PF1
+        stx PF2
+        rts
+
+DrawDot
+	ldx #%10100000
+        stx PF0
+        ldx #0
+        stx PF1
+        stx PF2
+        rts
 
 ; drawplayer subroutine
 CheckPlayer
@@ -159,10 +157,14 @@ CheckPlayer
         cmp #9
         bcc InSprite
         lda #0
-        sta GRP0
         sta WSYNC
+        sta GRP0
+        nop
+        nop
+        nop
         dey
         rts
+
 InSprite
 	tax		; local coord -> X
         lda Frame0,x	; lookup color
@@ -179,6 +181,7 @@ InSprite
 SetHorizPos
 	sta WSYNC	; start a new line
 	sec		; set carry flag
+        
 DivideLoop
 	sbc #15		; subtract 15
 	bcs DivideLoop	; branch until negative
@@ -202,6 +205,7 @@ MoveJoystick
         cpx #2
         bcc SkipMoveUp
         dex
+        
 SkipMoveUp
 	lda #%00010000	;Down?
 	bit SWCHA 
@@ -209,6 +213,7 @@ SkipMoveUp
         cpx #167
         bcs SkipMoveDown
         inx
+        
 SkipMoveDown
 	stx YPos
 ; Move horizontally
@@ -219,6 +224,7 @@ SkipMoveDown
         cpx #17
         bcc SkipMoveLeft
         dex
+        
 SkipMoveLeft
 	lda #%10000000	;Right?
 	bit SWCHA 
@@ -226,6 +232,7 @@ SkipMoveLeft
         cpx #154
         bcs SkipMoveRight
         inx
+        
 SkipMoveRight
 	stx XPos
 	rts
@@ -269,6 +276,8 @@ ColorFrame0
 	org $fffc
         .word Start	; reset vector
         .word Start	; BRK vector
+
+
 
 
 
