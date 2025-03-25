@@ -1,48 +1,31 @@
-;================================================
-; This is a class project to see where folks are at.
-; If you want, you can use this as your course game.
-; The basis is to survive. Don't hit PF, Missiles, or Ball
-; Survive to time limit.
-;================================================
+
 	processor 6502
         include "vcs.h"
        	include "macro.h"
        	include "xmacro.h"
 
-;================================================
-; Constants below. 
-;================================================
-
-
-;================================================
-; For now, below here is where we'll go with variables
-; Though, constants would go above here.
-;================================================
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Variables segment
 
         seg.u Variables
 	org $80
 
 Temp		.byte
+XPos		.byte
+YPos		.byte
 
-;================================================
-; Actual code begins here.
-;================================================
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Code segment
 
 	seg Code
         org $f000
 
-;================================================
-; Since the 2600 boots in random, we need to set it up.
-; For now, we'll just do CLEAN_START but we'll need to
-; set up other things later.
-;================================================
-
 Start
 	CLEAN_START
-        
-;================================================
-; And now our kernel begins. 
-;================================================
+        lda #20
+        sta XPos
+        lda #1
+        sta YPos
 
 NextFrame
         lsr SWCHB	; test Game Reset switch
@@ -57,6 +40,23 @@ NextFrame
 	VERTICAL_SYNC
 ; 37 lines of underscan
 	TIMER_SETUP 37
+        
+; Borrowed from example 13 Joysticks
+; move X and Y coordinates w/ joystick
+	jsr MoveJoystick
+; the next two scanlines
+; position the player horizontally
+	lda XPos	; get X coordinate
+        ldx #0		; player 0
+        jsr SetHorizPos	; set coarse offset
+        sta WSYNC	; sync w/ scanline
+        sta HMOVE	; apply fine offsets
+; it's ok if we took an extra scanline because
+; the PIA timer will always count 37 lines
+; wait for end of underscan
+        
+        
+        
         TIMER_WAIT
 
 ; I feel like I messed up the drawing but it's not freaking out so maybe it's okay?
@@ -82,6 +82,7 @@ DrawField
         REPEAT 8
         sta WSYNC
         REPEND
+        ldy #174 ;Start line counter for player
 ; Middle
 	ldx #%00100000
         stx PF0
@@ -89,7 +90,8 @@ DrawField
         stx PF1
         stx PF2
         REPEAT 20
-        sta WSYNC
+        jsr CheckPlayer
+        ;sta WSYNC
         REPEND
         ldx #%10100000
         stx PF0
@@ -97,7 +99,7 @@ DrawField
         stx PF1
         stx PF2
         REPEAT 10
-        sta WSYNC
+        jsr CheckPlayer
         REPEND
         ldx #%00100000
         stx PF0
@@ -105,7 +107,7 @@ DrawField
         stx PF1
         stx PF2
         REPEAT 115
-        sta WSYNC
+        jsr CheckPlayer
         REPEND
         ldx #%10100000
         stx PF0
@@ -113,7 +115,7 @@ DrawField
         stx PF1
         stx PF2
         REPEAT 10
-        sta WSYNC
+        jsr CheckPlayer
         REPEND
         ldx #%00100000
         stx PF0
@@ -121,7 +123,7 @@ DrawField
         stx PF1
         stx PF2
         REPEAT 20
-        sta WSYNC
+        jsr CheckPlayer
         REPEND
 ; Bottom
 	ldx #%11100000
@@ -148,6 +150,86 @@ OverScan
 ; total = 262 lines, go to next frame
         jmp NextFrame
 
+
+; drawplayer subroutine
+CheckPlayer
+	tya
+        sec
+        sbc YPos
+        cmp #9
+        bcc InSprite
+        lda #0
+        sta GRP0
+        sta WSYNC
+        dey
+        rts
+InSprite
+	tax		; local coord -> X
+        lda Frame0,x	; lookup color
+        sta WSYNC	; sync w/ scanline
+        sta GRP0	; store bitmap
+        lda ColorFrame0,x ; lookup color
+        sta COLUP0	; store color
+        dey		; decrement X
+        rts
+        
+; SetHorizPos routine
+; A = X coordinate
+; X = player number (0 or 1)
+SetHorizPos
+	sta WSYNC	; start a new line
+	sec		; set carry flag
+DivideLoop
+	sbc #15		; subtract 15
+	bcs DivideLoop	; branch until negative
+	eor #7		; calculate fine offset
+	asl
+	asl
+	asl
+	asl
+	sta RESP0,x	; fix coarse position
+	sta HMP0,x	; set fine offset
+	rts		; return to caller
+
+; Read joystick movement and apply to object 0
+MoveJoystick
+; Move vertically
+; (up and down are actually reversed since ypos starts at bottom)
+	ldx YPos
+	lda #%00100000	;Up?
+	bit SWCHA
+	bne SkipMoveUp
+        cpx #2
+        bcc SkipMoveUp
+        dex
+SkipMoveUp
+	lda #%00010000	;Down?
+	bit SWCHA 
+	bne SkipMoveDown
+        cpx #167
+        bcs SkipMoveDown
+        inx
+SkipMoveDown
+	stx YPos
+; Move horizontally
+        ldx XPos
+	lda #%01000000	;Left?
+	bit SWCHA
+	bne SkipMoveLeft
+        cpx #17
+        bcc SkipMoveLeft
+        dex
+SkipMoveLeft
+	lda #%10000000	;Right?
+	bit SWCHA 
+	bne SkipMoveRight
+        cpx #154
+        bcs SkipMoveRight
+        inx
+SkipMoveRight
+	stx XPos
+	rts
+
 Sprite
 
 ;---Graphics Data from PlayerPal 2600---
@@ -161,6 +243,7 @@ Frame0
     	.byte #%01111110;$1A
     	.byte #%01111110;$F6
     	.byte #%00111100;$F6
+        .byte #%00000000
 ;---End Graphics Data---
 
 
@@ -175,6 +258,7 @@ ColorFrame0
     	.byte #$1A;
     	.byte #$F6;
     	.byte #$F6;
+        .byte #$00
 ;---End Color Data---
 
 
@@ -185,6 +269,10 @@ ColorFrame0
 	org $fffc
         .word Start	; reset vector
         .word Start	; BRK vector
+
+
+
+
 
 
 
