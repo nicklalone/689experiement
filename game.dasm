@@ -1,25 +1,48 @@
-
+;================================================
+; This is a class project to see where folks are at.
+; If you want, you can use this as your course game.
+; The basis is to survive. Don't hit PF, Missiles, or Ball
+; Survive to time limit.
+;================================================
 	processor 6502
         include "vcs.h"
        	include "macro.h"
        	include "xmacro.h"
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Variables segment
+;================================================
+; Constants below. 
+;================================================
+
+
+;================================================
+; For now, below here is where we'll go with variables
+; Though, constants would go above here.
+;================================================
 
         seg.u Variables
 	org $80
 
 Temp		.byte
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Code segment
+;================================================
+; Actual code begins here.
+;================================================
 
 	seg Code
         org $f000
 
+;================================================
+; Since the 2600 boots in random, we need to set it up.
+; For now, we'll just do CLEAN_START but we'll need to
+; set up other things later.
+;================================================
+
 Start
 	CLEAN_START
+        
+;================================================
+; And now our kernel begins. 
+;================================================
 
 NextFrame
         lsr SWCHB	; test Game Reset switch
