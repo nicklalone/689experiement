@@ -14,6 +14,9 @@
 Temp		.byte
 XPos		.byte
 YPos		.byte
+fTimer		.byte
+onesDig		.byte
+tensDig		.byte
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Code segment
@@ -25,8 +28,11 @@ Start
 	CLEAN_START
         lda #80
         sta XPos
-        lda #80
         sta YPos
+        lda #0
+        sta fTimer
+        sta onesDig
+        sta tensDig
 
 NextFrame
         lsr SWCHB	; test Game Reset switch
@@ -57,9 +63,6 @@ NextFrame
 ; wait for end of underscan
         
         TIMER_WAIT
-
-; I feel like I messed up the drawing but 
-;it's not freaking out so maybe it's okay?
 
 DrawField
 ; Reflection
@@ -132,6 +135,18 @@ OverScan
         TIMER_WAIT
 ; total = 262 lines, go to next frame
         jmp NextFrame
+        
+TimerLogic
+	ldx fTimer
+        inx
+        cpx #60
+        bcc SkipReset
+        ldx #0
+        stx fTimer
+        ldx onesDig
+
+SkipReset
+	
 
 DrawWall
 	ldx #%00100000
@@ -276,6 +291,8 @@ ColorFrame0
 	org $fffc
         .word Start	; reset vector
         .word Start	; BRK vector
+
+
 
 
 
