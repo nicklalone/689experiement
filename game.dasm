@@ -46,18 +46,21 @@ NextFrame
 ; 1 + 3 lines of VSYNC
 	VERTICAL_SYNC
 ; 37 lines of underscan
-	TIMER_SETUP 37
+	TIMER_SETUP 32
         
 ; Borrowed from example 13 Joysticks
 ; move X and Y coordinates w/ joystick
 	jsr MoveJoystick
 ; the next two scanlines
 ; position the player horizontally
+	sta WSYNC
 	lda XPos	; get X coordinate
         ldx #0		; player 0
+        sta WSYNC
         jsr SetHorizPos	; set coarse offset
         sta WSYNC	; sync w/ scanline
         sta HMOVE	; apply fine offsets
+        sta WSYNC
 ; it's ok if we took an extra scanline because
 ; the PIA timer will always count 37 lines
 ; wait for end of underscan
@@ -74,9 +77,54 @@ DrawField
         stx PF1
         stx PF2
 ; Wait for next scanline
-	REPEAT 30
+	REPEAT 3
         sta WSYNC
 	REPEND
+        
+        lda tensDig
+        ASL
+        ASL
+        CLC
+	ADC tensDig
+        tax
+        
+        lda onesDig
+        ASL
+        ASL
+        CLC
+	ADC onesDig
+        tay
+        
+        sta WSYNC
+        
+; Timer draw
+	REPEAT 5
+        
+        REPEAT 4
+        lda SecondDigit,Y
+        ora FirstDigit,X
+        sta PF1
+        REPEAT 10
+        nop
+        REPEND
+        lda #0
+        sta PF1
+        sta WSYNC
+	REPEND
+        
+        inx
+        iny
+        
+        REPEND
+        
+        lda #0
+        sta PF1
+        
+        sta WSYNC
+        sta WSYNC
+        sta WSYNC
+        sta WSYNC
+        
 ; Top line
 	ldx #%11100000
         stx PF0
@@ -130,8 +178,10 @@ DrawField
         REPEND
 
 OverScan
+	jsr TimerLogic
+        sta WSYNC ; HELP
 ; 29 lines of overscan
-	TIMER_SETUP 29
+	TIMER_SETUP 29  
         TIMER_WAIT
 ; total = 262 lines, go to next frame
         jmp NextFrame
@@ -139,14 +189,28 @@ OverScan
 TimerLogic
 	ldx fTimer
         inx
+        stx fTimer
         cpx #60
         bcc SkipReset
         ldx #0
         stx fTimer
         ldx onesDig
+        inx
+        stx onesDig
+        cpx #10
+        bcc SkipReset
+        ldx #0
+        stx onesDig
+        ldx tensDig
+        inx
+        stx tensDig
+        cpx #10
+        bcc SkipReset
+        ldx #0
+        stx tensDig
 
 SkipReset
-	
+	rts
 
 DrawWall
 	ldx #%00100000
@@ -206,6 +270,7 @@ DivideLoop
 	asl
 	asl
 	sta RESP0,x	; fix coarse position
+        sta WSYNC
 	sta HMP0,x	; set fine offset
 	rts		; return to caller
 
@@ -225,7 +290,7 @@ SkipMoveUp
 	lda #%00010000	;Down?
 	bit SWCHA 
 	bne SkipMoveDown
-        cpx #147
+        cpx #147 ; HELP
         bcs SkipMoveDown
         inx
         
@@ -283,6 +348,143 @@ ColorFrame0
         .byte #$00
 ;---End Color Data---
 
+;---Graphics Data from PlayerPal 2600---
+FirstDigit
+Number0X
+        .byte #%01000000;--
+        .byte #%10100000;--
+        .byte #%10100000;--
+        .byte #%10100000;--
+        .byte #%01000000;--
+Number1X
+        .byte #%01000000;--
+        .byte #%11000000;--
+        .byte #%01000000;--
+        .byte #%01000000;--
+        .byte #%11100000;--
+Number2X
+        .byte #%01000000;--
+        .byte #%10100000;--
+        .byte #%00100000;--
+        .byte #%01000000;--
+        .byte #%11100000;--
+Number3X
+        .byte #%11000000;--
+        .byte #%00100000;--
+        .byte #%01000000;--
+        .byte #%00100000;--
+        .byte #%11000000;--
+Number4X
+        .byte #%10100000;--
+        .byte #%10100000;--
+        .byte #%11100000;--
+        .byte #%00100000;--
+        .byte #%00100000;--
+Number5X
+        .byte #%11100000;--
+        .byte #%10000000;--
+        .byte #%11100000;--
+        .byte #%00100000;--
+        .byte #%11100000;--
+Number6X
+        .byte #%11100000;--
+        .byte #%10000000;--
+        .byte #%11100000;--
+        .byte #%10100000;--
+        .byte #%11100000;--
+Number7X
+        .byte #%11100000;--
+        .byte #%00100000;--
+        .byte #%01000000;--
+        .byte #%10000000;--
+        .byte #%10000000;--
+Number8X
+        .byte #%11100000;--
+        .byte #%10100000;--
+        .byte #%01000000;--
+        .byte #%10100000;--
+        .byte #%11100000;--
+Number9X
+        .byte #%11100000;--
+        .byte #%10100000;--
+        .byte #%11100000;--
+        .byte #%00100000;--
+        .byte #%11100000;--
+SecondDigit
+NumberX0
+        .byte #%00000100;--
+        .byte #%00001010;--
+        .byte #%00001010;--
+        .byte #%00001010;--
+        .byte #%00000100;--
+NumberX1
+        .byte #%00000100;--
+        .byte #%00001100;--
+        .byte #%00000100;--
+        .byte #%00000100;--
+        .byte #%00001110;--
+NumberX2
+        .byte #%00000100;--
+        .byte #%00001010;--
+        .byte #%00000010;--
+        .byte #%00000100;--
+        .byte #%00001110;--
+NumberX3
+        .byte #%00001100;--
+        .byte #%00000010;--
+        .byte #%00000100;--
+        .byte #%00000010;--
+        .byte #%00001100;--
+NumberX4
+        .byte #%00001010;--
+        .byte #%00001010;--
+        .byte #%00001110;--
+        .byte #%00000010;--
+        .byte #%00000010;--
+NumberX5
+        .byte #%00001110;--
+        .byte #%00001000;--
+        .byte #%00001110;--
+        .byte #%00000010;--
+        .byte #%00001110;--
+NumberX6
+        .byte #%00001110;--
+        .byte #%00001000;--
+        .byte #%00001110;--
+        .byte #%00001010;--
+        .byte #%00001110;--
+NumberX7
+        .byte #%00001110;--
+        .byte #%00000010;--
+        .byte #%00000100;--
+        .byte #%00001000;--
+        .byte #%00001000;--
+NumberX8
+        .byte #%00001110;--
+        .byte #%00001010;--
+        .byte #%00000100;--
+        .byte #%00001010;--
+        .byte #%00001110;--
+NumberX9
+        .byte #%00001110;--
+        .byte #%00001010;--
+        .byte #%00001110;--
+        .byte #%00000010;--
+        .byte #%00001110;--
+;---End Graphics Data---
+
+
+;---Color Data from PlayerPal 2600---
+
+ColorNumber
+        .byte #$0E;
+        .byte #$0E;
+        .byte #$0E;
+        .byte #$0E;
+        .byte #$0E;
+
+;---End Color Data---
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -291,6 +493,10 @@ ColorFrame0
 	org $fffc
         .word Start	; reset vector
         .word Start	; BRK vector
+
+
+
+
 
 
 
