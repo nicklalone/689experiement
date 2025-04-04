@@ -1,6 +1,5 @@
-
-		processor 6502
-        	include "vcs.h"
+	processor 6502
+        include "vcs.h"
        	include "macro.h"
        	include "xmacro.h"
 
@@ -12,8 +11,10 @@
 	org $80
 
 Temp		.byte
-XPos		.byte
-YPos		.byte
+P0XPos		.byte
+P1XPos		.byte
+P0YPos		.byte
+P1YPos		.byte
 fTimer		.byte
 onesDig		.byte
 tensDig		.byte
@@ -27,8 +28,11 @@ tensDig		.byte
 Start
 	CLEAN_START
         lda #80
-        sta XPos
-        sta YPos
+        sta P0XPos
+        sta P0YPos
+        lda #40
+        sta P1XPos
+        sta P1YPos
         lda #0
         sta fTimer
         sta onesDig
@@ -51,10 +55,12 @@ NextFrame
 ; Borrowed from example 13 Joysticks
 ; move X and Y coordinates w/ joystick
 	jsr MoveJoystick
+; move Player 1
+	jsr P1Follow
 ; the next two scanlines
 ; position the player horizontally
 	sta WSYNC
-	lda XPos	; get X coordinate
+	lda P0XPos	; get X coordinate
         ldx #0		; player 0
         sta WSYNC
         jsr SetHorizPos	; set coarse offset
@@ -135,7 +141,7 @@ DrawField
         sta WSYNC
         REPEND
         
-        ldy #154 ;Start line counter for player
+        ldy #159 ;Start line counter for player
 
 ; Middle
         REPEAT 20
@@ -146,7 +152,7 @@ DrawField
         jsr DrawDot
         jsr CheckPlayer
         REPEND
-        REPEAT 95
+        REPEAT 100
         jsr DrawWall
         jsr CheckPlayer
         REPEND
@@ -173,7 +179,7 @@ DrawField
         stx PF0
         stx PF1
         stx PF2
-        REPEAT 10
+        REPEAT 5
         sta WSYNC
         REPEND
 
@@ -229,10 +235,11 @@ DrawDot
         rts
 
 ; drawplayer subroutine
+; Player (x is 0 or 1)
 CheckPlayer
 	tya
         sec
-        sbc YPos
+        sbc P0YPos,x
         cmp #9
         bcc InSprite
         lda #0
@@ -246,17 +253,29 @@ CheckPlayer
 
 InSprite
 	tax		; local coord -> X
-        lda Frame0,x	; lookup color
+        lda P0Frame0,x	; lookup color
         sta WSYNC	; sync w/ scanline
         sta GRP0	; store bitmap
-        lda ColorFrame0,x ; lookup color
+        lda P0ColorFrame0,x ; lookup color
         sta COLUP0	; store color
         dey		; decrement X
         rts
         
+P1Follow
+	ldx P1XPos
+       	cpx P0XPos
+        bcc P1FollowLeft
+        dex
+        stx P1XPos
+        rts
+P1FollowLeft
+	inx
+        stx P1XPos
+        rts
+        
 ; SetHorizPos routine
 ; A = X coordinate
-; X = player number (0 or 1)
+; X = player number (0 or 1), missle index (2 or 3), ball index (4)
 SetHorizPos
 	sta WSYNC	; start a new line
 	sec		; set carry flag
@@ -277,8 +296,8 @@ DivideLoop
 ; Read joystick movement and apply to object 0
 MoveJoystick
 ; Move vertically
-; (up and down are actually reversed since ypos starts at bottom)
-	ldx YPos
+; (up and down are actually reversed since P0YPos starts at bottom)
+	ldx P0YPos
 	lda #%00100000	;Up?
 	bit SWCHA
 	bne SkipMoveUp
@@ -290,14 +309,14 @@ SkipMoveUp
 	lda #%00010000	;Down?
 	bit SWCHA 
 	bne SkipMoveDown
-        cpx #147 ; HELP
+        cpx #152 ; HELP
         bcs SkipMoveDown
         inx
         
 SkipMoveDown
-	stx YPos
+	stx P0YPos
 ; Move horizontally
-        ldx XPos
+        ldx P0XPos
 	lda #%01000000	;Left?
 	bit SWCHA
 	bne SkipMoveLeft
@@ -314,14 +333,14 @@ SkipMoveLeft
         inx
         
 SkipMoveRight
-	stx XPos
+	stx P0XPos
 	rts
 
 Sprite
 
 ;---Graphics Data from PlayerPal 2600---
 
-Frame0
+P0Frame0
     	.byte #%00111100;$F6
     	.byte #%01111110;$F6
     	.byte #%01111110;$C4
@@ -336,7 +355,7 @@ Frame0
 
 ;---Color Data from PlayerPal 2600---
 
-ColorFrame0
+P0ColorFrame0
     	.byte #$F6;
     	.byte #$F6;
     	.byte #$C4;
@@ -485,6 +504,33 @@ ColorNumber
 
 ;---End Color Data---
 
+;---Graphics Data from PlayerPal 2600---
+
+P1Frame0
+        .byte #%10000001;$DC
+        .byte #%01000010;$DC
+        .byte #%10011001;$DC
+        .byte #%01100110;$DC
+        .byte #%01111110;$DC
+        .byte #%01011010;$DC
+        .byte #%11100111;$DC
+        .byte #%01000010;$DC
+;---End Graphics Data---
+
+
+;---Color Data from PlayerPal 2600---
+
+P1ColorFrame0
+        .byte #$DC;
+        .byte #$DC;
+        .byte #$DC;
+        .byte #$DC;
+        .byte #$DC;
+        .byte #$DC;
+        .byte #$DC;
+        .byte #$DC;
+;---End Color Data---
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -493,6 +539,8 @@ ColorNumber
 	org $fffc
         .word Start	; reset vector
         .word Start	; BRK vector
+
+
 
 
 
