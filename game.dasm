@@ -1,10 +1,16 @@
-	processor 6502
-        include "vcs.h"
+
+		processor 6502
+        	include "vcs.h"
        	include "macro.h"
        	include "xmacro.h"
 
 ;=======================================
-; 
+; 04082025 - 	1. Edit / Rearrange Code
+;		2. Get P1 Sprite rendering and chasing
+;		3. Make ball and missiles appear randomly from 4 corners
+;		4. Collision with walls, changes speed, size
+;		5. Game starts on button press
+;		6. If time, Difficulty?
 ;=======================================
 
         seg.u Variables
@@ -539,23 +545,3 @@ P1ColorFrame0
 	org $fffc
         .word Start	; reset vector
         .word Start	; BRK vector
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
