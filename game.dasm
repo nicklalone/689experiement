@@ -1,16 +1,12 @@
 
-		processor 6502
+	processor 6502
         	include "vcs.h"
        	include "macro.h"
        	include "xmacro.h"
 
 ;=======================================
-; 04082025 - 	1. Edit / Rearrange Code
-;		2. Get P1 Sprite rendering and chasing
-;		3. Make ball and missiles appear randomly from 4 corners
-;		4. Collision with walls, changes speed, size
-;		5. Game starts on button press
-;		6. If time, Difficulty?
+; 04/22/2025 - 	1. Ball
+;		2. Missles
 ;=======================================
 
         seg.u Variables
@@ -24,6 +20,9 @@ P1YPos		.byte
 fTimer		.byte
 onesDig		.byte
 tensDig		.byte
+chase		.byte
+isDead		.byte
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Code segment
@@ -33,16 +32,21 @@ tensDig		.byte
 
 Start
 	CLEAN_START
-        lda #80
+        lda #40
         sta P0XPos
         sta P0YPos
-        lda #40
+        lda #90
         sta P1XPos
         sta P1YPos
         lda #0
         sta fTimer
         sta onesDig
         sta tensDig
+        lda P1ColorFrame0
+        sta COLUP1
+        lda #0
+        sta chase
+        sta isDead
 
 NextFrame
         lsr SWCHB	; test Game Reset switch
@@ -58,26 +62,74 @@ NextFrame
 ; 37 lines of underscan
 	TIMER_SETUP 32
         
+; Check if player is alive
+	lda isDead
+        beq move_and_chase
+CenterP1Sprite
+	; Set the sprite positions to the
+        ; center of the screen, tweaked slightly
+        ; to look more centered
+        ; potential alternate values
+        ; x = 82 or 86
+        ; y = 76 or 68
+        lda #89
+        sta P1XPos
+        lda #72
+        sta P1YPos
+        jmp skip_P1_follow
+        
+move_and_chase
 ; Borrowed from example 13 Joysticks
 ; move X and Y coordinates w/ joystick
 	jsr MoveJoystick
 ; move Player 1
-	jsr P1Follow
+	lda chase
+	bne skip_P1_follow
+	jsr P1FollowX
+        jsr P1FollowY
+skip_P1_follow        
+	
+        lda #1
+        sec
+        sbc chase
+        sta chase
 ; the next two scanlines
 ; position the player horizontally
 	sta WSYNC
 	lda P0XPos	; get X coordinate
-        ldx #0		; player 0
+        ;ldx #0		; player 0
         sta WSYNC
-        jsr SetHorizPos	; set coarse offset
+        jsr SetHorizPos0	; set coarse offset
         sta WSYNC	; sync w/ scanline
+        lda P1XPos	; get X coordinate
+        ;ldx #1		; player 0
+        jsr SetHorizPos1	; set coarse offset
         sta HMOVE	; apply fine offsets
         sta WSYNC
 ; it's ok if we took an extra scanline because
 ; the PIA timer will always count 37 lines
 ; wait for end of underscan
-        
+        jsr P1CollisionCheckX
         TIMER_WAIT
+        jmp DrawField
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
+        lda SecondDigit,Y
 
 DrawField
 ; Reflection
@@ -143,35 +195,76 @@ DrawField
         ldx #%11111111
         stx PF1
         stx PF2
-        REPEAT 8
+        REPEAT 7
         sta WSYNC
         REPEND
-        
-        ldy #159 ;Start line counter for player
 
-; Middle
-        REPEAT 20
-        jsr DrawWall
-        jsr CheckPlayer
+; CURRENT ATTEMPT
+        ldy #159
+        REPEAT 26
+        nop
         REPEND
-        REPEAT 10
-        jsr DrawDot
-        jsr CheckPlayer
-        REPEND
-        REPEAT 100
-        jsr DrawWall
-        jsr CheckPlayer
-        REPEND
-        REPEAT 10
-        jsr DrawDot
-        jsr CheckPlayer
-        REPEND
-        REPEAT 20
-        jsr DrawWall
-        jsr CheckPlayer
+        ldx #%00000000
+        stx PF2
+        stx PF1 
+        ldx #%00100000
+        sta WSYNC
+        stx PF0
+        
+        REPEAT 15 ; Padding out before the loop so the loop stays consistant cycles-wise
+        nop
         REPEND
         
-; Bottom
+        ldx 0
+PlayfieldLine ;.....................................................................................................................
+	
+        ldx PFData1,Y ;Finish before 28 cycles
+        stx PF1
+        
+        tya
+        sec
+        sbc P0YPos
+        cmp #9
+        tax
+        bcc player_draw0   ; 4 cycles if break, 5 if not
+        lda #00
+        bcs skip_player_draw0 ;nooooooooo this is secretly 3 cycles
+player_draw0
+        lda P0Frame0,x	; lookup color
+skip_player_draw0
+	
+        sta GRP0	; store bitmap
+        sta WSYNC		; 0
+        
+        
+        
+        
+        lda P0ColorFrame0,x ; lookup color - could be 5 cycles if x goes over page boundery
+        sta COLUP0		; 7
+        
+        tya
+        sec
+        sbc P1YPos
+        cmp #9
+        tax			; 18
+        bcc draw_player1  ; 4 cycles if break, 5 if not     ; BCC IS SECRETLY 3 CYCLES
+        lda #00
+        bcs skip_player_draw1
+draw_player1
+        lda P1Frame0,x	; lookup color
+skip_player_draw1
+        sta GRP1		; 28
+
+        
+	dey
+        bne PlayfieldLine ;------------------------------------------------------
+        
+        
+        
+        sta WSYNC
+        sty GRP0
+        sty GRP1
+; Bottom;
 	ldx #%11100000
         stx PF0
         ldx #%11111111
@@ -180,7 +273,7 @@ DrawField
         REPEAT 8
         sta WSYNC
         REPEND
-; End
+; End;
 	ldx #0
         stx PF0
         stx PF1
@@ -188,6 +281,7 @@ DrawField
         REPEAT 5
         sta WSYNC
         REPEND
+
 
 OverScan
 	jsr TimerLogic
@@ -200,7 +294,10 @@ OverScan
         
 TimerLogic
 	ldx fTimer
+        lda isDead
+        bne StopTimer
         inx
+StopTimer
         stx fTimer
         cpx #60
         bcc SkipReset
@@ -222,54 +319,14 @@ TimerLogic
         stx tensDig
 
 SkipReset
-	rts
-
-DrawWall
-	ldx #%00100000
-        stx PF0
-        ldx #0
-        stx PF1
-        stx PF2
-        rts
-
-DrawDot
-	ldx #%10100000
-        stx PF0
-        ldx #0
-        stx PF1
-        stx PF2
-        rts
-
-; drawplayer subroutine
-; Player (x is 0 or 1)
-CheckPlayer
-	tya
-        sec
-        sbc P0YPos,x
-        cmp #9
-        bcc InSprite
-        lda #0
-        sta WSYNC
-        sta GRP0
-        nop
-        nop
-        nop
-        dey
-        rts
-
-InSprite
-	tax		; local coord -> X
-        lda P0Frame0,x	; lookup color
-        sta WSYNC	; sync w/ scanline
-        sta GRP0	; store bitmap
-        lda P0ColorFrame0,x ; lookup color
-        sta COLUP0	; store color
-        dey		; decrement X
-        rts
+	rts 
         
-P1Follow
+        
+P1FollowX
 	ldx P1XPos
        	cpx P0XPos
+        beq P1FollowSkipX
+        cpx P0XPos
         bcc P1FollowLeft
         dex
         stx P1XPos
@@ -277,26 +334,81 @@ P1Follow
 P1FollowLeft
 	inx
         stx P1XPos
+P1FollowSkipX
+        rts
+        
+        
+P1FollowY
+	ldx P1YPos
+       	cpx P0YPos
+        beq P1FollowSkipY
+        cpx P0YPos
+        bcc P1FollowUp
+        dex
+        stx P1YPos
+        rts
+P1FollowUp
+	inx
+        stx P1YPos
+P1FollowSkipY
+        rts   
+        
+P1CollisionCheckX
+	lda P1XPos
+        sec
+       	sbc P0XPos
+        cmp #3
+        bcc P1CollisionCheckY
+        rts
+P1CollisionCheckY
+	lda P1YPos
+        sec
+       	sbc P0YPos
+        cmp #3
+        bcc IsDead
+        rts
+IsDead
+	lda #1
+        sta isDead
         rts
         
 ; SetHorizPos routine
 ; A = X coordinate
 ; X = player number (0 or 1), missle index (2 or 3), ball index (4)
-SetHorizPos
+SetHorizPos0
 	sta WSYNC	; start a new line
 	sec		; set carry flag
         
-DivideLoop
+DivideLoop0
 	sbc #15		; subtract 15
-	bcs DivideLoop	; branch until negative
+	bcs DivideLoop0	; branch until negative
 	eor #7		; calculate fine offset
 	asl
 	asl
 	asl
 	asl
-	sta RESP0,x	; fix coarse position
+        ;nop
+	sta RESP0	; fix coarse position
         sta WSYNC
-	sta HMP0,x	; set fine offset
+	sta HMP0	; set fine offset
+	rts		; return to caller
+        
+SetHorizPos1
+	sta WSYNC	; start a new line
+	sec		; set carry flag
+        
+DivideLoop1
+	sbc #15		; subtract 15
+	bcs DivideLoop1	; branch until negative
+	eor #7		; calculate fine offset
+	asl
+	asl
+	asl
+	asl
+        ;nop
+	sta RESP1	; fix coarse position
+        sta WSYNC
+	sta HMP1	; set fine offset
 	rts		; return to caller
 
 ; Read joystick movement and apply to object 0
@@ -326,7 +438,7 @@ SkipMoveDown
 	lda #%01000000	;Left?
 	bit SWCHA
 	bne SkipMoveLeft
-        cpx #17
+        cpx #20
         bcc SkipMoveLeft
         dex
         
@@ -334,18 +446,19 @@ SkipMoveLeft
 	lda #%10000000	;Right?
 	bit SWCHA 
 	bne SkipMoveRight
-        cpx #154
+        cpx #157
         bcs SkipMoveRight
         inx
         
 SkipMoveRight
 	stx P0XPos
 	rts
+        
 
 Sprite
 
 ;---Graphics Data from PlayerPal 2600---
-
+	.align 256
 P0Frame0
     	.byte #%00111100;$F6
     	.byte #%01111110;$F6
@@ -528,14 +641,26 @@ P1Frame0
 
 P1ColorFrame0
         .byte #$DC;
-        .byte #$DC;
-        .byte #$DC;
-        .byte #$DC;
-        .byte #$DC;
-        .byte #$DC;
-        .byte #$DC;
-        .byte #$DC;
 ;---End Color Data---
+
+	.align 256
+PFData1
+	REPEAT 16
+	.byte #%00000000
+        REPEND
+        REPEAT 8
+	.byte #%10000000
+	REPEND
+	REPEAT 112
+	.byte #%00000000
+        REPEND
+        REPEAT 8
+	.byte #%10000000
+	REPEND
+	REPEAT 16
+	.byte #%00000000
+        REPEND
+
 
 
 
@@ -545,3 +670,7 @@ P1ColorFrame0
 	org $fffc
         .word Start	; reset vector
         .word Start	; BRK vector
+
+
+
+
