@@ -1,676 +1,679 @@
+    processor 6502
+    include "vcs.h"
+    include "macro.h"
+    include "xmacro.h"
 
-	processor 6502
-        	include "vcs.h"
-       	include "macro.h"
-       	include "xmacro.h"
+    seg.u Variables
+    org $80
 
-;=======================================
-; 04/22/2025 - 	1. Ball
-;		2. Missles
-;=======================================
+P0XPos          .byte
+P1XPos          .byte
+P0YPos          .byte
+P1YPos          .byte
+fTimer          .byte
+onesDig         .byte
+tensDig         .byte
+chase           .byte
+isDead          .byte
 
-        seg.u Variables
-	org $80
+BallXPos        .byte
+BallYPos        .byte
+BallXVel        .byte
+BallYVel        .byte
+BallWidthCode   .byte
 
-Temp		.byte
-P0XPos		.byte
-P1XPos		.byte
-P0YPos		.byte
-P1YPos		.byte
-fTimer		.byte
-onesDig		.byte
-tensDig		.byte
-chase		.byte
-isDead		.byte
+SoundTimer0     .byte
+SoundTimer1     .byte
+GameOverSoundPlayedF .byte
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Code segment
-
-	seg Code
-        org $f000
+    seg Code
+    org $f000
 
 Start
-	CLEAN_START
-        lda #40
-        sta P0XPos
-        sta P0YPos
-        lda #90
-        sta P1XPos
-        sta P1YPos
-        lda #0
-        sta fTimer
-        sta onesDig
-        sta tensDig
-        lda P1ColorFrame0
-        sta COLUP1
-        lda #0
-        sta chase
-        sta isDead
+    CLEAN_START
+    lda #0
+    sta AUDV0
+    sta AUDV1
+    sta AUDC0
+    sta AUDC1
+    sta SoundTimer0
+    sta SoundTimer1
+    sta GameOverSoundPlayedF
+    lda #40
+    sta P0XPos
+    sta P0YPos
+    lda #90
+    sta P1XPos
+    sta P1YPos
+    lda #0
+    sta fTimer
+    sta onesDig
+    sta tensDig
+    sta COLUP1
+    lda #0
+    sta chase
+    sta isDead
+
+    LDA #100
+    sta BallXPos
+    LDA #70
+    sta BallYPos
+    LDA #1
+    sta BallXVel
+    LDA #1
+    sta BallYVel
+    lda #1
+    sta BallWidthCode
 
 NextFrame
-        lsr SWCHB	; test Game Reset switch
-        bcc Start	; reset?
-; BG color
-        ldx #$80	
-    	stx COLUBK	
-; PF color
-	lda #$1C
-        sta COLUPF
-; 1 + 3 lines of VSYNC
-	VERTICAL_SYNC
-; 37 lines of underscan
-	TIMER_SETUP 32
-        
-; Check if player is alive
-	lda isDead
-        beq move_and_chase
-CenterP1Sprite
-	; Set the sprite positions to the
-        ; center of the screen, tweaked slightly
-        ; to look more centered
-        ; potential alternate values
-        ; x = 82 or 86
-        ; y = 76 or 68
-        lda #89
-        sta P1XPos
-        lda #72
-        sta P1YPos
-        jmp skip_P1_follow
-        
-move_and_chase
-; Borrowed from example 13 Joysticks
-; move X and Y coordinates w/ joystick
-	jsr MoveJoystick
-; move Player 1
-	lda chase
-	bne skip_P1_follow
-	jsr P1FollowX
-        jsr P1FollowY
-skip_P1_follow        
-	
-        lda #1
-        sec
-        sbc chase
-        sta chase
-; the next two scanlines
-; position the player horizontally
-	sta WSYNC
-	lda P0XPos	; get X coordinate
-        ;ldx #0		; player 0
-        sta WSYNC
-        jsr SetHorizPos0	; set coarse offset
-        sta WSYNC	; sync w/ scanline
-        lda P1XPos	; get X coordinate
-        ;ldx #1		; player 0
-        jsr SetHorizPos1	; set coarse offset
-        sta HMOVE	; apply fine offsets
-        sta WSYNC
-; it's ok if we took an extra scanline because
-; the PIA timer will always count 37 lines
-; wait for end of underscan
-        jsr P1CollisionCheckX
-        TIMER_WAIT
-        jmp DrawField
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
-        lda SecondDigit,Y
+    lsr SWCHB
+    bcc Start
+
+    lda isDead
+    beq SetNormalGameColors
+
+SetGameOverStateColors:
+    ldx #$02
+    stx COLUBK
+    lda #$44
+    sta COLUPF
+    lda #$44
+    sta COLUP1
+    jmp GameColorsSetDone
+
+SetNormalGameColors:
+    ldx #$80
+    stx COLUBK
+    lda #$1C
+    sta COLUPF
+    sta COLUP1
+GameColorsSetDone:
+
+    VERTICAL_SYNC
+    TIMER_SETUP 32
+
+    lda isDead
+    beq move_and_chase
+CenterP1Sprite:
+    lda #89
+    sta P1XPos
+    lda #72
+    sta P1YPos
+    jmp skip_P1_follow
+
+move_and_chase:
+    sta WSYNC
+    jsr MoveJoystick
+    lda chase
+    bne skip_P1_follow
+    jsr P1FollowX
+    jsr P1FollowY
+skip_P1_follow:
+    lda #1
+    sec
+    sbc chase
+    sta chase
+
+    sta WSYNC
+    lda P0XPos
+    jsr SetHorizPos0
+    sta WSYNC
+    lda P1XPos
+    jsr SetHorizPos1
+    sta WSYNC
+    lda BallXPos
+    jsr SetHorizPosBall
+    sta WSYNC
+    sta HMOVE
+
+    jsr P1CollisionCheckX
+
+    TIMER_WAIT
+    lda isDead
+    bne .SkipColorPtrSetup
+    lda #<P0ColorFrame0
+    lda #>P0ColorFrame0
+.SkipColorPtrSetup:
+    jmp DrawField
 
 DrawField
-; Reflection
-	ldx #%00000001
-        stx CTRLPF
-; Clear PF registers
-	ldx #0
-        stx PF0
-        stx PF1
-        stx PF2
-; Wait for next scanline
-	REPEAT 3
-        sta WSYNC
-	REPEND
-        
-        lda tensDig
-        ASL
-        ASL
-        CLC
-	ADC tensDig
-        tax
-        
-        lda onesDig
-        ASL
-        ASL
-        CLC
-	ADC onesDig
-        tay
-        
-        sta WSYNC
-        
-; Timer draw
-	REPEAT 5
-        
-        REPEAT 4
-        lda SecondDigit,Y
-        ora FirstDigit,X
-        sta PF1
-        REPEAT 10
-        nop
-        REPEND
-        lda #0
-        sta PF1
-        sta WSYNC
-	REPEND
-        
-        inx
-        iny
-        
-        REPEND
-        
-        lda #0
-        sta PF1
-        
-        sta WSYNC
-        sta WSYNC
-        sta WSYNC
-        sta WSYNC
-        
-; Top line
-	ldx #%11100000
-        stx PF0
-        ldx #%11111111
-        stx PF1
-        stx PF2
-        REPEAT 7
-        sta WSYNC
-        REPEND
+    ldx BallWidthCode
+    lda WidthBitsLookup,x
+    ora #%00001001
+    sta CTRLPF
 
-; CURRENT ATTEMPT
-        ldy #159
-        REPEAT 26
-        nop
-        REPEND
-        ldx #%00000000
-        stx PF2
-        stx PF1 
-        ldx #%00100000
-        sta WSYNC
-        stx PF0
-        
-        REPEAT 15 ; Padding out before the loop so the loop stays consistant cycles-wise
-        nop
-        REPEND
-        
-        ldx 0
-PlayfieldLine ;.....................................................................................................................
-	
-        ldx PFData1,Y ;Finish before 28 cycles
-        stx PF1
-        
-        tya
-        sec
-        sbc P0YPos
-        cmp #9
-        tax
-        bcc player_draw0   ; 4 cycles if break, 5 if not
-        lda #00
-        bcs skip_player_draw0 ;nooooooooo this is secretly 3 cycles
-player_draw0
-        lda P0Frame0,x	; lookup color
-skip_player_draw0
-	
-        sta GRP0	; store bitmap
-        sta WSYNC		; 0
-        
-        
-        
-        
-        lda P0ColorFrame0,x ; lookup color - could be 5 cycles if x goes over page boundery
-        sta COLUP0		; 7
-        
-        tya
-        sec
-        sbc P1YPos
-        cmp #9
-        tax			; 18
-        bcc draw_player1  ; 4 cycles if break, 5 if not     ; BCC IS SECRETLY 3 CYCLES
-        lda #00
-        bcs skip_player_draw1
-draw_player1
-        lda P1Frame0,x	; lookup color
-skip_player_draw1
-        sta GRP1		; 28
+    ldx #0
+    stx PF0
+    stx PF1
+    stx PF2
 
-        
-	dey
-        bne PlayfieldLine ;------------------------------------------------------
-        
-        
-        
-        sta WSYNC
-        sty GRP0
-        sty GRP1
-; Bottom;
-	ldx #%11100000
-        stx PF0
-        ldx #%11111111
-        stx PF1
-        stx PF2
-        REPEAT 8
-        sta WSYNC
-        REPEND
-; End;
-	ldx #0
-        stx PF0
-        stx PF1
-        stx PF2
-        REPEAT 5
-        sta WSYNC
-        REPEND
+    REPEAT 3
+    sta WSYNC
+    REPEND
 
+    lda tensDig
+    asl
+    asl
+    clc
+    adc tensDig
+    tax
+
+    lda onesDig
+    asl
+    asl
+    clc
+    adc onesDig
+    tay
+
+    sta WSYNC
+
+    REPEAT 5
+    REPEAT 4
+    lda SecondDigit,Y
+    ora FirstDigit,X
+    sta PF1
+    REPEAT 10
+    nop
+    REPEND
+    lda #0
+    sta PF1
+    sta WSYNC
+    REPEND
+
+    inx
+    iny
+    REPEND
+
+    lda #0
+    sta PF1
+
+    sta WSYNC
+    sta WSYNC
+    sta WSYNC
+    sta WSYNC
+
+    ldx #%11100000
+    stx PF0
+    ldx #%11111111
+    stx PF1
+    stx PF2
+    REPEAT 7
+    sta WSYNC
+    REPEND
+
+    ldy #159
+    REPEAT 26
+    nop
+    REPEND
+    ldx #%00000000
+    stx PF2
+    stx PF1
+    ldx #%00100000
+    sta WSYNC
+    stx PF0
+
+    REPEAT 15
+    nop
+    REPEND
+
+PlayfieldLine
+    tya
+    cmp BallYPos
+    bne .BallIsOffThisScanline
+    lda #%00000010
+    sta ENABL
+    jmp .BallLogicDoneThisScanline
+.BallIsOffThisScanline:
+    lda #0
+    sta ENABL
+.BallLogicDoneThisScanline:
+    ldx PFData1,Y
+    stx PF1
+
+    tya
+    sec
+    sbc P0YPos
+    cmp #9
+    tax
+    bcc player_draw0_gfx_2x2ball
+    lda #%00000000
+    bcs skip_player_draw0_gfx_2x2ball
+player_draw0_gfx_2x2ball:
+    lda P0Frame0,x
+skip_player_draw0_gfx_2x2ball:
+    sta GRP0
+    sta WSYNC
+    
+    lda #$F6
+    sta COLUP0
+    
+    tya
+    sec
+    sbc P1YPos
+    cmp #9
+    tax
+    bcc draw_player1_gfx_2x2ball
+    lda #%00000000
+    bcs skip_player_draw1_gfx_2x2ball
+draw_player1_gfx_2x2ball:
+    lda P1Frame0,x
+skip_player_draw1_gfx_2x2ball:
+    sta GRP1
+    
+    dey
+    bne PlayfieldLine
+    
+    sta WSYNC 
+    sty GRP0
+    sty GRP1
+    sty ENABL
+
+    ldx #%11100000
+    stx PF0
+    ldx #%11111111
+    stx PF1
+    stx PF2
+    REPEAT 8
+    sta WSYNC
+    REPEND
+
+    ldx #0
+    stx PF0
+    stx PF1
+    stx PF2
+    REPEAT 5
+    sta WSYNC
+    REPEND
 
 OverScan
-	jsr TimerLogic
-        sta WSYNC ; HELP
-; 29 lines of overscan
-	TIMER_SETUP 29  
-        TIMER_WAIT
-; total = 262 lines, go to next frame
-        jmp NextFrame
-        
+    jsr TimerLogic
+    jsr UpdateAudio
+    jsr UpdateBall
+
+    sta WSYNC
+    TIMER_SETUP 29
+    TIMER_WAIT
+    jmp NextFrame
+
+UpdateBall
+    lda isDead
+    beq .ContinueUpdateBall_UBNew
+    jmp .ExitUpdateBall_UBNew
+.ContinueUpdateBall_UBNew:
+    lda BallXPos
+    clc
+    adc BallXVel
+    sta BallXPos
+    lda BallYPos
+    clc
+    adc BallYVel
+    sta BallYPos
+
+    lda BallXPos
+    cmp #20
+    bcs .CheckXHighBounce_UBNew
+    jmp .HandleBounceX_Far_UBNew
+.CheckXHighBounce_UBNew:
+    cmp #155
+    bcc .SkipXBounce_UBNew
+    jmp .HandleBounceX_Far_UBNew
+.SkipXBounce_UBNew:
+    jmp .CheckYBounce_UBNew
+
+.HandleBounceX_Far_UBNew:
+    jsr ReverseXVel
+    jsr ChangeBallWidth
+    jsr TriggerBounceSound
+    lda BallXPos
+    clc
+    adc BallXVel
+    sta BallXPos
+    jmp .CheckYBounce_UBNew
+    
+.CheckYBounce_UBNew:
+    lda BallYPos
+    cmp #10
+    bcs .CheckYHighBounce_UBNew
+    jmp .HandleBounceY_Far_UBNew
+.CheckYHighBounce_UBNew:
+    cmp #150
+    bcc .SkipYBounce_UBNew
+    jmp .HandleBounceY_Far_UBNew
+.SkipYBounce_UBNew:
+    jmp .CheckCollisions_UBNew
+
+.HandleBounceY_Far_UBNew:
+    jsr ReverseYVel
+    jsr ChangeBallWidth
+    jsr TriggerBounceSound
+    lda BallYPos
+    clc
+    adc BallYVel
+    sta BallYPos
+
+.CheckCollisions_UBNew:
+    lda CXP0FB
+    and #%01000000
+    beq .CheckP1Collision_Near_UBNew
+    jmp IsDead
+
+.CheckP1Collision_Near_UBNew:
+    lda CXP1FB
+    and #%01000000
+    beq .ClearCollisions_Near_UBNew
+    jmp IsDead
+
+.ClearCollisions_Near_UBNew:
+    sta WSYNC
+    sta CXCLR
+
+.ExitUpdateBall_UBNew:
+    rts
+
+ReverseXVel:
+    lda BallXVel
+    eor #$FF
+    clc
+    adc #1
+    sta BallXVel
+    rts
+ReverseYVel:
+    lda BallYVel
+    eor #$FF
+    clc
+    adc #1
+    sta BallYVel
+    rts
+ChangeBallWidth:
+    lda BallWidthCode
+    clc
+    adc #1
+    and #%00000011
+    sta BallWidthCode
+    rts
+
+TriggerBounceSound:
+    lda #%00000001
+    sta AUDC0
+    lda #%00010100
+    sta AUDF0
+    lda #%0000100
+    sta AUDV0
+    lda #4
+    sta SoundTimer0
+    rts
+TriggerGameOverSound:
+    lda GameOverSoundPlayedF
+    bne .ExitTriggerGOS_Buzz
+    inc GameOverSoundPlayedF
+    lda #%00000011
+    sta AUDC1
+    lda #%00001000
+    sta AUDF1
+    lda #%00001000
+    sta AUDV1
+    lda #180
+    sta SoundTimer1
+.ExitTriggerGOS_Buzz:
+    rts
+UpdateAudio:
+    lda SoundTimer0
+    beq .Audio0_Is_Off_UA_BuzzFinal
+    dec SoundTimer0
+    jmp .Audio0_Done_UA_BuzzFinal
+.Audio0_Is_Off_UA_BuzzFinal:
+    lda #0
+    sta AUDV0
+.Audio0_Done_UA_BuzzFinal:
+    lda SoundTimer1
+    beq .Audio1_Is_Off_UA_BuzzFinal
+    dec SoundTimer1
+    bne .Exit_UA_BuzzFinal
+.Audio1_Is_Off_UA_BuzzFinal:
+    lda #0
+    sta AUDV1
+.Exit_UA_BuzzFinal:
+    rts
+
 TimerLogic
-	ldx fTimer
-        lda isDead
-        bne StopTimer
-        inx
-StopTimer
-        stx fTimer
-        cpx #60
-        bcc SkipReset
-        ldx #0
-        stx fTimer
-        ldx onesDig
-        inx
-        stx onesDig
-        cpx #10
-        bcc SkipReset
-        ldx #0
-        stx onesDig
-        ldx tensDig
-        inx
-        stx tensDig
-        cpx #10
-        bcc SkipReset
-        ldx #0
-        stx tensDig
+    ldx fTimer
+    lda isDead
+    bne StopTimer
+    inx
+StopTimer:
+    stx fTimer
+    cpx #60
+    bcc SkipDigitUpdate
+    ldx #0
+    stx fTimer
+    ldx onesDig
+    inx
+    stx onesDig
+    cpx #10
+    bcc SkipDigitUpdate
+    ldx #0
+    stx onesDig
+    ldx tensDig
+    inx
+    stx tensDig
+    cpx #10
+    bcc SkipDigitUpdate
+    ldx #0
+    stx tensDig
+SkipDigitUpdate:
+    rts
 
-SkipReset
-	rts 
-        
-        
 P1FollowX
-	ldx P1XPos
-       	cpx P0XPos
-        beq P1FollowSkipX
-        cpx P0XPos
-        bcc P1FollowLeft
-        dex
-        stx P1XPos
-        rts
-P1FollowLeft
-	inx
-        stx P1XPos
-P1FollowSkipX
-        rts
-        
-        
+    ldx P1XPos
+    cpx P0XPos
+    beq P1FollowSkipX
+    bcc P1FollowLeft
+P1FollowRight:
+    dex
+    stx P1XPos
+    rts
+P1FollowLeft:
+    inx
+    stx P1XPos
+P1FollowSkipX:
+    rts
 P1FollowY
-	ldx P1YPos
-       	cpx P0YPos
-        beq P1FollowSkipY
-        cpx P0YPos
-        bcc P1FollowUp
-        dex
-        stx P1YPos
-        rts
-P1FollowUp
-	inx
-        stx P1YPos
-P1FollowSkipY
-        rts   
-        
+    ldx P1YPos
+    cpx P0YPos
+    beq P1FollowSkipY
+    bcc P1FollowUp
+P1FollowDown:
+    dex
+    stx P1YPos
+    rts
+P1FollowUp:
+    inx
+    stx P1YPos
+P1FollowSkipY:
+    rts
+
 P1CollisionCheckX
-	lda P1XPos
-        sec
-       	sbc P0XPos
-        cmp #3
-        bcc P1CollisionCheckY
-        rts
-P1CollisionCheckY
-	lda P1YPos
-        sec
-       	sbc P0YPos
-        cmp #3
-        bcc IsDead
-        rts
-IsDead
-	lda #1
-        sta isDead
-        rts
-        
-; SetHorizPos routine
-; A = X coordinate
-; X = player number (0 or 1), missle index (2 or 3), ball index (4)
-SetHorizPos0
-	sta WSYNC	; start a new line
-	sec		; set carry flag
-        
-DivideLoop0
-	sbc #15		; subtract 15
-	bcs DivideLoop0	; branch until negative
-	eor #7		; calculate fine offset
-	asl
-	asl
-	asl
-	asl
-        ;nop
-	sta RESP0	; fix coarse position
-        sta WSYNC
-	sta HMP0	; set fine offset
-	rts		; return to caller
-        
-SetHorizPos1
-	sta WSYNC	; start a new line
-	sec		; set carry flag
-        
-DivideLoop1
-	sbc #15		; subtract 15
-	bcs DivideLoop1	; branch until negative
-	eor #7		; calculate fine offset
-	asl
-	asl
-	asl
-	asl
-        ;nop
-	sta RESP1	; fix coarse position
-        sta WSYNC
-	sta HMP1	; set fine offset
-	rts		; return to caller
+    lda P1XPos
+    sec
+    sbc P0XPos
+    cmp #3
+    bcc P1CollisionCheckY
+    rts
+P1CollisionCheckY:
+    lda P1YPos
+    sec
+    sbc P0YPos
+    cmp #3
+    bcc IsDead
+    rts
+IsDead:
+    lda #1
+    sta isDead
+    jsr TriggerGameOverSound
+    rts
 
-; Read joystick movement and apply to object 0
-MoveJoystick
-; Move vertically
-; (up and down are actually reversed since P0YPos starts at bottom)
-	ldx P0YPos
-	lda #%00100000	;Up?
-	bit SWCHA
-	bne SkipMoveUp
-        cpx #2
-        bcc SkipMoveUp
-        dex
-        
-SkipMoveUp
-	lda #%00010000	;Down?
-	bit SWCHA 
-	bne SkipMoveDown
-        cpx #152 ; HELP
-        bcs SkipMoveDown
-        inx
-        
-SkipMoveDown
-	stx P0YPos
-; Move horizontally
-        ldx P0XPos
-	lda #%01000000	;Left?
-	bit SWCHA
-	bne SkipMoveLeft
-        cpx #20
-        bcc SkipMoveLeft
-        dex
-        
-SkipMoveLeft
-	lda #%10000000	;Right?
-	bit SWCHA 
-	bne SkipMoveRight
-        cpx #157
-        bcs SkipMoveRight
-        inx
-        
-SkipMoveRight
-	stx P0XPos
-	rts
-        
+SetHorizPos0:
+    sta WSYNC
+    sec
+DivideLoop0:
+    sbc #15
+    bcs DivideLoop0
+    eor #7
+    asl
+    asl
+    asl
+    asl
+    sta RESP0
+    sta WSYNC
+    sta HMP0
+    rts
+SetHorizPos1:
+    sta WSYNC
+    sec
+DivideLoop1:
+    sbc #15
+    bcs DivideLoop1
+    eor #7
+    asl
+    asl
+    asl
+    asl
+    sta RESP1
+    sta WSYNC
+    sta HMP1
+    rts
+SetHorizPosBall:
+    sta WSYNC
+    sec
+DivideLoopBall:
+    sbc #15
+    bcs DivideLoopBall
+    eor #7
+    asl
+    asl
+    asl
+    asl
+    sta RESBL
+    sta WSYNC
+    sta HMBL
+    rts
 
-Sprite
+MoveJoystick:
+    ldx P0YPos
+    lda #%00100000
+    bit SWCHA
+    bne SkipMoveUp
+    cpx #2
+    bcc SkipMoveUp
+    dex
+SkipMoveUp:
+    lda #%00010000
+    bit SWCHA
+    bne SkipMoveDown
+    cpx #152
+    bcs SkipMoveDown
+    inx
+SkipMoveDown:
+    stx P0YPos
+    ldx P0XPos
+    lda #%01000000
+    bit SWCHA
+    bne SkipMoveLeft
+    cpx #20
+    bcc SkipMoveLeft
+    dex
+SkipMoveLeft:
+    lda #%10000000
+    bit SWCHA
+    bne SkipMoveRight
+    cpx #157
+    bcs SkipMoveRight
+    inx
+SkipMoveRight:
+    stx P0XPos
+    rts
 
-;---Graphics Data from PlayerPal 2600---
-	.align 256
-P0Frame0
-    	.byte #%00111100;$F6
-    	.byte #%01111110;$F6
-    	.byte #%01111110;$C4
-    	.byte #%01111110;$F0
-    	.byte #%01111110;$42
-    	.byte #%01111110;$1A
-    	.byte #%01111110;$F6
-    	.byte #%00111100;$F6
-        .byte #%00000000
-;---End Graphics Data---
+Sprite:
+    .align 256
+P0Frame0:
+    .byte #%00111100
+    .byte #%01111110
+    .byte #%01111110
+    .byte #%01111110
+    .byte #%01111110
+    .byte #%01111110
+    .byte #%01111110
+    .byte #%00111100
+    .byte #%00000000
+P0ColorFrame0:
+    .byte #$F6
+    .byte #$F6
+    .byte #$C4
+    .byte #$F0
+    .byte #$42
+    .byte #$1A
+    .byte #$F6
+    .byte #$F6
+    .byte #$00
 
+FirstDigit:
+Number0X:   .byte #%01000000, #%10100000, #%10100000, #%10100000, #%01000000
+Number1X:   .byte #%01000000, #%11000000, #%01000000, #%01000000, #%11100000
+Number2X:   .byte #%01000000, #%10100000, #%00100000, #%01000000, #%11100000
+Number3X:   .byte #%11000000, #%00100000, #%01000000, #%00100000, #%11000000
+Number4X:   .byte #%10100000, #%10100000, #%11100000, #%00100000, #%00100000
+Number5X:   .byte #%11100000, #%10000000, #%11100000, #%00100000, #%11100000
+Number6X:   .byte #%11100000, #%10000000, #%11100000, #%10100000, #%11100000
+Number7X:   .byte #%11100000, #%00100000, #%01000000, #%10000000, #%10000000
+Number8X:   .byte #%11100000, #%10100000, #%01000000, #%10100000, #%11100000
+Number9X:   .byte #%11100000, #%10100000, #%11100000, #%00100000, #%11100000
 
-;---Color Data from PlayerPal 2600---
+SecondDigit:
+NumberX0:   .byte #%00000100, #%00001010, #%00001010, #%00001010, #%00000100
+NumberX1:   .byte #%00000100, #%00001100, #%00000100, #%00000100, #%00001110
+NumberX2:   .byte #%00000100, #%00001010, #%00000010, #%00000100, #%00001110
+NumberX3:   .byte #%00001100, #%00000010, #%00000100, #%00000010, #%00001100
+NumberX4:   .byte #%00001010, #%00001010, #%00001110, #%00000010, #%00000010
+NumberX5:   .byte #%00001110, #%00001000, #%00001110, #%00000010, #%00001110
+NumberX6:   .byte #%00001110, #%00001000, #%00001110, #%00001010, #%00001110
+NumberX7:   .byte #%00001110, #%00000010, #%00000100, #%00001000, #%00001000
+NumberX8:   .byte #%00001110, #%00001010, #%00000100, #%00001010, #%00001110
+NumberX9:   .byte #%00001110, #%00001010, #%00001110, #%00000010, #%00001110
 
-P0ColorFrame0
-    	.byte #$F6;
-    	.byte #$F6;
-    	.byte #$C4;
-    	.byte #$F0;
-    	.byte #$42;
-    	.byte #$1A;
-    	.byte #$F6;
-    	.byte #$F6;
-        .byte #$00
-;---End Color Data---
+P1Frame0:
+    .byte #%10000001
+    .byte #%01000010
+    .byte #%10011001
+    .byte #%01100110
+    .byte #%01111110
+    .byte #%01011010
+    .byte #%11100111
+    .byte #%01000010
+    .byte #%00000000
 
-;---Graphics Data from PlayerPal 2600---
-FirstDigit
-Number0X
-        .byte #%01000000;--
-        .byte #%10100000;--
-        .byte #%10100000;--
-        .byte #%10100000;--
-        .byte #%01000000;--
-Number1X
-        .byte #%01000000;--
-        .byte #%11000000;--
-        .byte #%01000000;--
-        .byte #%01000000;--
-        .byte #%11100000;--
-Number2X
-        .byte #%01000000;--
-        .byte #%10100000;--
-        .byte #%00100000;--
-        .byte #%01000000;--
-        .byte #%11100000;--
-Number3X
-        .byte #%11000000;--
-        .byte #%00100000;--
-        .byte #%01000000;--
-        .byte #%00100000;--
-        .byte #%11000000;--
-Number4X
-        .byte #%10100000;--
-        .byte #%10100000;--
-        .byte #%11100000;--
-        .byte #%00100000;--
-        .byte #%00100000;--
-Number5X
-        .byte #%11100000;--
-        .byte #%10000000;--
-        .byte #%11100000;--
-        .byte #%00100000;--
-        .byte #%11100000;--
-Number6X
-        .byte #%11100000;--
-        .byte #%10000000;--
-        .byte #%11100000;--
-        .byte #%10100000;--
-        .byte #%11100000;--
-Number7X
-        .byte #%11100000;--
-        .byte #%00100000;--
-        .byte #%01000000;--
-        .byte #%10000000;--
-        .byte #%10000000;--
-Number8X
-        .byte #%11100000;--
-        .byte #%10100000;--
-        .byte #%01000000;--
-        .byte #%10100000;--
-        .byte #%11100000;--
-Number9X
-        .byte #%11100000;--
-        .byte #%10100000;--
-        .byte #%11100000;--
-        .byte #%00100000;--
-        .byte #%11100000;--
-SecondDigit
-NumberX0
-        .byte #%00000100;--
-        .byte #%00001010;--
-        .byte #%00001010;--
-        .byte #%00001010;--
-        .byte #%00000100;--
-NumberX1
-        .byte #%00000100;--
-        .byte #%00001100;--
-        .byte #%00000100;--
-        .byte #%00000100;--
-        .byte #%00001110;--
-NumberX2
-        .byte #%00000100;--
-        .byte #%00001010;--
-        .byte #%00000010;--
-        .byte #%00000100;--
-        .byte #%00001110;--
-NumberX3
-        .byte #%00001100;--
-        .byte #%00000010;--
-        .byte #%00000100;--
-        .byte #%00000010;--
-        .byte #%00001100;--
-NumberX4
-        .byte #%00001010;--
-        .byte #%00001010;--
-        .byte #%00001110;--
-        .byte #%00000010;--
-        .byte #%00000010;--
-NumberX5
-        .byte #%00001110;--
-        .byte #%00001000;--
-        .byte #%00001110;--
-        .byte #%00000010;--
-        .byte #%00001110;--
-NumberX6
-        .byte #%00001110;--
-        .byte #%00001000;--
-        .byte #%00001110;--
-        .byte #%00001010;--
-        .byte #%00001110;--
-NumberX7
-        .byte #%00001110;--
-        .byte #%00000010;--
-        .byte #%00000100;--
-        .byte #%00001000;--
-        .byte #%00001000;--
-NumberX8
-        .byte #%00001110;--
-        .byte #%00001010;--
-        .byte #%00000100;--
-        .byte #%00001010;--
-        .byte #%00001110;--
-NumberX9
-        .byte #%00001110;--
-        .byte #%00001010;--
-        .byte #%00001110;--
-        .byte #%00000010;--
-        .byte #%00001110;--
-;---End Graphics Data---
+PFData1:
+    REPEAT 16
+    .byte #%00000000
+    REPEND
+    REPEAT 8
+    .byte #%10000000
+    REPEND
+    REPEAT 112
+    .byte #%00000000
+    REPEND
+    REPEAT 8
+    .byte #%10000000
+    REPEND
+    REPEAT 16
+    .byte #%00000000
+    REPEND
 
+WidthBitsLookup:
+    .byte %00000000
+    .byte %00010000
+    .byte %00100000
+    .byte %00110000
 
-;---Color Data from PlayerPal 2600---
-
-ColorNumber
-        .byte #$0E;
-        .byte #$0E;
-        .byte #$0E;
-        .byte #$0E;
-        .byte #$0E;
-
-;---End Color Data---
-
-;---Graphics Data from PlayerPal 2600---
-
-P1Frame0
-        .byte #%10000001;$DC
-        .byte #%01000010;$DC
-        .byte #%10011001;$DC
-        .byte #%01100110;$DC
-        .byte #%01111110;$DC
-        .byte #%01011010;$DC
-        .byte #%11100111;$DC
-        .byte #%01000010;$DC
-;---End Graphics Data---
-
-
-;---Color Data from PlayerPal 2600---
-
-P1ColorFrame0
-        .byte #$DC;
-;---End Color Data---
-
-	.align 256
-PFData1
-	REPEAT 16
-	.byte #%00000000
-        REPEND
-        REPEAT 8
-	.byte #%10000000
-	REPEND
-	REPEAT 112
-	.byte #%00000000
-        REPEND
-        REPEAT 8
-	.byte #%10000000
-	REPEND
-	REPEAT 16
-	.byte #%00000000
-        REPEND
-
-
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Epilogue
-
-	org $fffc
-        .word Start	; reset vector
-        .word Start	; BRK vector
-
-
-
-
+    org $fffc
+    .word Start
+    .word Start
